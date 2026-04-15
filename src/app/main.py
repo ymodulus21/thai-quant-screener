@@ -189,11 +189,52 @@ with tab_backtest:
     if "bt_result" in st.session_state:
         bt = st.session_state["bt_result"]
 
-        # ── Summary metrics ──────────────────────────────────────────────
-        st.subheader("Performance Summary")
-        st.dataframe(bt.summary, use_container_width=True)
+        # ── KPI highlights ───────────────────────────────────────────────
+        from src.backtest.metrics import (
+            cagr, sharpe_ratio, max_drawdown, jensens_alpha,
+            information_ratio, beta, value_at_risk, down_capture,
+        )
+        sr  = bt.strategy_returns
+        br  = bt.benchmark_returns
 
-        # ── Equity curves ────────────────────────────────────────────────
+        k1, k2, k3, k4, k5, k6 = st.columns(6)
+        k1.metric("CAGR",        f"{cagr(sr):.2%}",
+                  delta=f"{cagr(sr)-cagr(br):.2%} vs SET")
+        k2.metric("Sharpe",      f"{sharpe_ratio(sr):.2f}",
+                  delta=f"{sharpe_ratio(sr)-sharpe_ratio(br):.2f} vs SET")
+        k3.metric("Max Drawdown",f"{max_drawdown(sr):.2%}",
+                  delta=f"{max_drawdown(sr)-max_drawdown(br):.2%} vs SET",
+                  delta_color="inverse")
+        k4.metric("Alpha (ann.)",f"{jensens_alpha(sr, br):.2%}")
+        k5.metric("Info Ratio",  f"{information_ratio(sr, br):.2f}")
+        k6.metric("Beta",        f"{beta(sr, br):.2f}")
+
+        st.divider()
+
+        # ── Full tearsheet (2 sections) ───────────────────────────────────
+        st.subheader("Performance Tearsheet")
+
+        summary = bt.summary
+        # Split at benchmark-relative rows
+        standalone_rows  = ["Total Return","CAGR","Volatility","Max Drawdown",
+                            "Max DD Duration","VaR (95%)","CVaR (95%)",
+                            "Sharpe","Sortino","Calmar","Win Rate"]
+        relative_rows    = ["Beta","Alpha (ann.)","Info Ratio",
+                            "Up Capture","Down Capture"]
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.caption("Standalone Metrics")
+            rows_present = [r for r in standalone_rows if r in summary.index]
+            st.dataframe(summary.loc[rows_present], use_container_width=True)
+        with col_b:
+            st.caption("Benchmark-Relative Metrics")
+            rows_present = [r for r in relative_rows if r in summary.index]
+            st.dataframe(summary.loc[rows_present], use_container_width=True)
+
+        st.divider()
+
+        # ── Equity curve ─────────────────────────────────────────────────
         st.subheader("Equity Curve vs SET Index")
         curve_df = pd.DataFrame({
             f"{style.title()} Top{top_n}": bt.equity_curve,
@@ -203,8 +244,7 @@ with tab_backtest:
 
         # ── Drawdown ─────────────────────────────────────────────────────
         st.subheader("Drawdown")
-        dd_df = bt.drawdown.rename("Drawdown")
-        st.area_chart(dd_df)
+        st.area_chart(bt.drawdown.rename("Drawdown"))
 
         # ── Portfolio history ─────────────────────────────────────────────
         with st.expander("Monthly Portfolio Holdings"):
@@ -213,6 +253,28 @@ with tab_backtest:
                 for d, tickers in bt.portfolio_history.items()
             ]
             st.dataframe(pd.DataFrame(hist_rows), use_container_width=True)
+
+        # ── Methodology disclaimer ────────────────────────────────────────
+        with st.expander("Methodology & Known Limitations"):
+            st.warning("""
+**Backtest Limitations — Read Before Acting on Results**
+
+- **Survivorship Bias:** Universe includes only stocks currently listed.
+  Companies delisted during the test period are excluded, inflating returns by ~1-3%.
+
+- **Fundamental Look-Ahead Bias:** P/E, ROE, P/B values are current snapshots (2026),
+  not the values available at each historical rebalance date.
+  A production-grade system would use point-in-time filing dates.
+
+- **Small Universe:** SET50 = 32 stocks. Factor z-scores are less statistically
+  robust than in larger markets (S&P 500 = 500 stocks).
+
+- **Transaction Costs:** 0.25% one-way (realistic for online brokers).
+  Actual costs vary by broker, order size, and liquidity.
+
+**Past performance does not guarantee future results.**
+This tool is for educational and research purposes only.
+            """)
 
 
 # ── Tab 3: About ─────────────────────────────────────────────────────────────
