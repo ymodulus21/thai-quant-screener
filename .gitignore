@@ -1,0 +1,20 @@
+# Cache & data
+.cache/
+*.parquet
+*.pyc
+__pycache__/
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit secrets (local only)
+.streamlit/secrets.toml
